@@ -45,8 +45,14 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('change-agent-status', async (event, { agentId, newStatus }) => {
+  // Never trust data coming from the renderer: only accept known statuses.
+  const VALID_STATUSES = ['Available', 'Busy', 'Break', 'Offline'];
+
+  ipcMain.handle('change-agent-status', async (event, { agentId, newStatus } = {}) => {
     try {
+      if (!VALID_STATUSES.includes(newStatus)) {
+        throw new Error(`สถานะไม่ถูกต้อง: ${newStatus} (ใช้ได้: ${VALID_STATUSES.join(', ')})`);
+      }
       const dataPath = resolveDataPath('agent-data.json');
       const raw = await fs.readFile(dataPath, 'utf8');
       const db = JSON.parse(raw);
@@ -72,7 +78,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false, // ปิด sandbox เพื่อให้ preload ใช้ได้
+      sandbox: true, // preload only uses contextBridge + ipcRenderer, which work in the sandbox
       preload: path.join(__dirname, 'preload.js'),
     },
   });

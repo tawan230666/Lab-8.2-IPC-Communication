@@ -1,103 +1,60 @@
-# 🔄 Lab 8.2: IPC Communication (Electron)
+# Electron IPC — Secure Main ↔ Renderer Communication
 
-> **สรุปสั้น ๆ**  
-> โปรเจ็กต์นี้สาธิตการสื่อสาร **IPC** ระหว่าง **Main Process** (Node.js) และ **Renderer Process** (Chromium) ผ่าน **preload.js** ที่เปิดใช้ `contextIsolation` และปิด `nodeIntegration` เพื่อความปลอดภัย พร้อมตัวอย่างฟังก์ชันจริงสำหรับ **Agent Wallboard** เช่น โหลดข้อมูลเอเจนต์ และเปลี่ยนสถานะ
+**An Agent Wallboard desktop prototype showing how an Electron UI talks to the main process safely: a typed `contextBridge` API, request/response IPC, and input validation in the main process.**
 
-## ✅ Highlights
-- ใช้ `ipcMain.handle()` ↔ `ipcRenderer.invoke()` ผ่าน **preload bridge**
-- รองรับ **ภาษาไทย + อีโมจิ** ครบ
-- มีเดโม 4 ส่วน พร้อมรูปผลลัพธ์และปุ่ม **เคลียร์**
-- โครงสร้างไฟล์เรียบง่าย: `main.js`, `preload.js`, `index.html`, `agent-data.json`
+![Electron](https://img.shields.io/badge/Electron-47848F?logo=electron&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
 
----
+> **ENGSE203, Lab 8.2: IPC Communication.** Previous: [8.1 First Electron app](https://github.com/tawan230666/Lab-8.1-Electron.js) · Next: [8.3 Native APIs](https://github.com/tawan230666/Lab-8.3-Native-APIs-System-Integration).
+>
+> ▶️ [Watch the demo video](docs/media/lab8-2-demo.mp4)
 
-## ▶️ เดโมวิดีโอ (รันจริง)
-> ใส่วิดีโอเดโมไว้ที่ `docs/media/lab8-2-demo.mp4` แล้ว README จะแสดงตัวเล่นอัตโนมัติ
+## How it works
 
-<video src="docs/media/lab8-2-demo.mp4" controls width="840"></video>
-
----
-
-## 🧪 เดโมการทำงาน + สกรีนช็อต
-
-### 1) 📤 Demo 1: ส่งข้อความไป Main Process
-- ปุ่ม **📤 ส่งข้อความ** ส่งไป Main และรับ JSON กลับ
-- ปุ่ม **🧹 เคลียร์** เคลียร์กล่องผลลัพธ์
-
-**ส่งข้อความ:**  
-![Demo 1 — Send](docs/images/demo1_send.png)
-
-**เคลียร์:**  
-![Demo 1 — Clear](docs/images/demo1_clear.png)
-
----
-
-### 2) 👋 Demo 2: ระบบทักทาย Agent
-- ปุ่ม **👋 เข้าสู่ระบบ** ส่งชื่อไปให้ Main เลือกข้อความทักทายแบบสุ่ม
-- ปุ่ม **🧹 เคลียร์** ล้างผลลัพธ์
-
-**เข้าสู่ระบบ (ทักทาย):**  
-![Demo 2 — Login](docs/images/demo2_login.png)
-
-**เคลียร์:**  
-![Demo 2 — Clear](docs/images/demo2_clear.png)
-
----
-
-### 3) 📊 Process Information
-อธิบายบทบาทของ **Main / Renderer / Preload** และลำดับงาน IPC
-
-![Process Information](docs/images/process_info.png)
-
----
-
-### 4) 📊 Demo 3: Agent Wallboard Functions
-- **📊 โหลดข้อมูล Agents** อ่าน `agent-data.json` (ผ่าน Main)
-- **🔄 เปลี่ยนสถานะ** แก้สถานะและเขียนกลับไฟล์
-- **🧹 เคลียร์** ล้างผลลัพธ์/ซ่อนตัวเลือก
-
-**โหลดข้อมูล Agents:**  
-![Demo 3 — Load Agents](docs/images/demo3_load.png)
-
-**เปลี่ยนสถานะ:**  
-![Demo 3 — Change Status](docs/images/demo3_change.png)
-
-**เคลียร์:**  
-![Demo 3 — Clear](docs/images/demo3_clear.png)
-
----
-
-## 🧱 โครงสร้างโปรเจ็กต์
-```
-.
-├── main.js
-├── preload.js
-├── index.html
-├── agent-data.json
-└── docs/
-    ├── images/            # สกรีนช็อต (ไฟล์ใน README นี้)
-    └── media/
-        └── lab8-2-demo.mp4 (วิดีโอเดโม)
+```mermaid
+sequenceDiagram
+    participant R as Renderer (index.html)
+    participant P as preload.js (contextBridge)
+    participant M as Main process
+    participant F as agent-data.json
+    R->>P: window.electronAPI.changeAgentStatus("A001", "Break")
+    P->>M: ipcRenderer.invoke("change-agent-status", …)
+    M->>M: validate status against allow-list
+    M->>F: read · update · write
+    M-->>R: { success, agent, message }
 ```
 
-## 🚀 วิธีรัน
+**Security model**
+
+- The renderer runs with `contextIsolation: true`, `nodeIntegration: false` and `sandbox: true`, so it has no access to Node.js or the file system.
+- `preload.js` exposes exactly four functions on `window.electronAPI` and nothing else.
+- The main process treats renderer input as untrusted: the agent status is checked against an allow-list before anything is written.
+- `ipcMain.handle` / `ipcRenderer.invoke` give promise-based request/response calls with structured `{ success, error }` results.
+
+## Demos
+
+| # | Demo | IPC channel |
+|---|---|---|
+| 1 | Send a message and receive a JSON reply | `send-message` |
+| 2 | Agent greeting with a random welcome message | `say-hello` |
+| 3 | Load agents and change their status (persisted to JSON) | `get-agents`, `change-agent-status` |
+| 4 | Process information panel | — |
+
+| Send a message | Agent greeting | Load agents | Change status |
+|---|---|---|---|
+| ![](docs/images/demo1_send.png) | ![](docs/images/demo2_login.png) | ![](docs/images/demo3_load.png) | ![](docs/images/demo3_change.png) |
+
+## Run
+
 ```bash
+git clone https://github.com/tawan230666/Lab-8.2-IPC-Communication.git
+cd Lab-8.2-IPC-Communication
 npm install
 npm start
 ```
 
-> เปิด DevTools เพื่อดู Log ทั้งฝั่ง Renderer และ Terminal เพื่อดู Log ฝั่ง Main
+> The demo video is stored with Git LFS; run `git lfs pull` after cloning to download it.
 
 ---
 
-## 🔑 แนวคิดสำคัญ (Key Concepts)
-1. **Security First** – `contextIsolation: true`, `nodeIntegration: false`, ใช้ `preload.js`
-2. **Async IPC** – `ipcMain.handle()` ↔ `ipcRenderer.invoke()`
-3. **Data Contract** – ตอบกลับเป็น JSON ที่ระบุ `success | data | error | timestamp`
-4. **UX ที่ดี** – แสดงสถานะ Loading / Success / Error + ปุ่ม **เคลียร์**
-5. **Pattern การนำไปใช้จริง** – Wallboard: โหลดข้อมูล, อัปเดตสถานะ, แจ้งเตือน
-
----
-
-## 📝 License
-MIT
+**Author:** Tawan Tiphkun (ธาวัน ทิพคุณ), 67543210033-6, [@tawan230666](https://github.com/tawan230666), Software Engineering, RMUTL Chiang Mai
